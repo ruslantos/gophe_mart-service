@@ -39,7 +39,7 @@ func (r *UserRepository) InitStorage() error {
 	}
 
 	_, err = r.db.ExecContext(context.Background(),
-		`CREATE TABLE IF NOT EXISTS orders(order_id TEXT,status TEXT, accrual INT, user_id TEXT, uploaded_at TIMESTAMP);
+		`CREATE TABLE IF NOT EXISTS orders(order_id TEXT,status TEXT, accrual FLOAT, user_id TEXT, uploaded_at TIMESTAMP);
 				CREATE UNIQUE INDEX IF NOT EXISTS idx_order_id ON orders(order_id);`)
 	if err != nil {
 		logger.Get().Error("Failed to create orders", zap.Error(err))

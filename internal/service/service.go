@@ -120,7 +120,7 @@ func (s *UserService) processOrder(ctx context.Context, orderNumber string) {
 
 			// сохраняем предварительный результат и запрашиваем дальше
 			if orderInfo.Status == model.STATE_REGISTERED || orderInfo.Status == model.STATE_PROCESSING {
-				order.Status = model.STATE_REGISTERED
+				order.Status = orderInfo.Status
 				if err := s.repo.SaveOrder(ctx, order); err != nil {
 					log.Printf("Failed to save order %s: %v\n", orderInfo.Order, err)
 				}
@@ -129,12 +129,9 @@ func (s *UserService) processOrder(ctx context.Context, orderNumber string) {
 
 			//сохраняем результат расчета баллов и выходим
 			if orderInfo.Status == model.STATE_PROCESSED || orderInfo.Status == model.STATE_INVALID {
-				order := model.Order{
-					OrderID:    orderInfo.Order,
-					Status:     orderInfo.Status,
-					Accrual:    orderInfo.Accrual,
-					UploadedAt: time.Now(),
-				}
+				order.Status = orderInfo.Status
+				order.Accrual = orderInfo.Accrual
+
 				if err := s.repo.SaveOrder(ctx, order); err != nil {
 					log.Printf("Failed to save order %s: %v\n", orderInfo.Order, err)
 				}
