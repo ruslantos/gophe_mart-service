@@ -8,6 +8,7 @@ import (
 
 	internalErrors "github.com/ruslantos/gophemart-service/internal/errors"
 	"github.com/ruslantos/gophemart-service/internal/logger"
+	"github.com/ruslantos/gophemart-service/internal/middlware/auth"
 
 	"github.com/ruslantos/gophemart-service/internal/service"
 )
@@ -50,6 +51,8 @@ func (h *UserHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	newCookie := auth.CreateSignedCookie(req.Login)
+	http.SetCookie(w, &newCookie)
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("User registered and authenticated successfully"))
 }
