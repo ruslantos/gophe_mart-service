@@ -12,12 +12,14 @@ import (
 	"github.com/ruslantos/gophemart-service/internal/clients"
 	internalErrors "github.com/ruslantos/gophemart-service/internal/errors"
 	"github.com/ruslantos/gophemart-service/internal/logger"
-	"github.com/ruslantos/gophemart-service/internal/models"
+	"github.com/ruslantos/gophemart-service/internal/model"
 	"github.com/ruslantos/gophemart-service/internal/repository"
 )
 
 type repo interface {
-	GetOrder(ctx context.Context, orderID string) (models.Order, error)
+	GetOrder(ctx context.Context, orderID string) (model.Order, error)
+	GetOrders(ctx context.Context, userID string) ([]model.Order, error)
+	SaveOrder(ctx context.Context, order model.Order) error
 }
 
 type UserService struct {
@@ -54,12 +56,26 @@ func (s *UserService) Authenticate(ctx context.Context, login, password string) 
 	}
 	return user.Password == password
 }
-func (s *UserService) GetOrder(ctx context.Context, orderNumber string) (models.Order, error) {
+func (s *UserService) GetOrder(ctx context.Context, orderNumber string) (model.Order, error) {
 	order, err := s.repo.GetOrder(ctx, orderNumber)
 	if err != nil {
-		return models.Order{}, err
+		return model.Order{}, err
 	}
 	return order, nil
+}
+func (s *UserService) GetOrders(ctx context.Context, userID string) ([]model.Order, error) {
+	order, err := s.repo.GetOrders(ctx, userID)
+	if err != nil {
+		return []model.Order{}, err
+	}
+	return order, nil
+}
+func (s *UserService) SaveOrder(ctx context.Context, order model.Order) error {
+	err := s.repo.SaveOrder(ctx, order)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // воркер отправки заказов в сервис loyalty
@@ -96,14 +112,28 @@ func (s *UserService) processOrder(ctx context.Context, orderNumber string) {
 				logger.Get().Error("Failed to process order", zap.String("orderNumber", orderNumber), zap.Error(err))
 				return
 			}
-			logger.Get().Info("Order processed", zap.String("orderNumber", orderNumber), zap.String("status", orderInfo.Status), zap.Int64("accrual", orderInfo.Accrual))
+			logger.Get().Info("Order processed:", zap.String("orderNumber", orderNumber), zap.String("status", orderInfo.Status), zap.Float64("accrual", orderInfo.Accrual))
 
-			//сохраняем результат расчета баллов
-			if orderInfo.Status == "PROCESSED" || orderInfo.Status == "INVALID" {
-				order := models.Order{
-					OrderID: orderInfo.Order,
-					Status:  orderInfo.Status,
-					Accrual: orderInfo.Accrual,
+			order := model.Order{
+				OrderID: orderInfo.Order,
+			}
+
+			// сохраняем предварительный результат и запрашиваем дальше
+			if orderInfo.Status == model.STATE_REGISTERED || orderInfo.Status == model.STATE_PROCESSING {
+				order.Status = model.STATE_REGISTERED
+				if err := s.repo.SaveOrder(ctx, order); err != nil {
+					log.Printf("Failed to save order %s: %v\n", orderInfo.Order, err)
+				}
+				continue
+			}
+
+			//сохраняем результат расчета баллов и выходим
+			if orderInfo.Status == model.STATE_PROCESSED || orderInfo.Status == model.STATE_INVALID {
+				order := model.Order{
+					OrderID:    orderInfo.Order,
+					Status:     orderInfo.Status,
+					Accrual:    orderInfo.Accrual,
+					UploadedAt: time.Now(),
 				}
 				if err := s.repo.SaveOrder(ctx, order); err != nil {
 					log.Printf("Failed to save order %s: %v\n", orderInfo.Order, err)

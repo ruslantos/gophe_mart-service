@@ -13,7 +13,7 @@ import (
 
 	internalErrors "github.com/ruslantos/gophemart-service/internal/errors"
 	"github.com/ruslantos/gophemart-service/internal/logger"
-	"github.com/ruslantos/gophemart-service/internal/models"
+	"github.com/ruslantos/gophemart-service/internal/model"
 )
 
 type User struct {
@@ -39,7 +39,7 @@ func (r *UserRepository) InitStorage() error {
 	}
 
 	_, err = r.db.ExecContext(context.Background(),
-		`CREATE TABLE IF NOT EXISTS orders(order_id TEXT,status TEXT, accrual INT, user_id TEXT);
+		`CREATE TABLE IF NOT EXISTS orders(order_id TEXT,status TEXT, accrual INT, user_id TEXT, uploaded_at TIMESTAMP);
 				CREATE UNIQUE INDEX IF NOT EXISTS idx_order_id ON orders(order_id);`)
 	if err != nil {
 		logger.Get().Error("Failed to create orders", zap.Error(err))
@@ -78,20 +78,22 @@ func (r *UserRepository) GetUserByLogin(ctx context.Context, login string) (*Use
 }
 
 // order
-func (r *UserRepository) SaveOrder(ctx context.Context, order models.Order) error {
+func (r *UserRepository) SaveOrder(ctx context.Context, order model.Order) error {
 	q := `
-		INSERT INTO orders (order_ud, status, accrual, user_id)
-		VALUES ($1, $2, $3, $4)`
-	_, err := r.db.ExecContext(ctx, q, order.OrderID, order.Status, order.Accrual, order.UserID)
+INSERT INTO orders (order_id, status, accrual, user_id, uploaded_at) VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (order_id) 
+DO UPDATE SET status = EXCLUDED.status, accrual = EXCLUDED.accrual
+`
+	_, err := r.db.ExecContext(ctx, q, order.OrderID, order.Status, order.Accrual, order.UserID, order.UploadedAt)
 	if err != nil {
 		return fmt.Errorf("failed to save order: %w", err)
 	}
 	return nil
 }
-func (r *UserRepository) GetOrder(ctx context.Context, orderID string) (models.Order, error) {
-	var order models.Order
-	q := `SELECT order_id, status, accrual, user_id FROM orders WHERE order_id = $1`
-	err := r.db.QueryRowContext(ctx, q, orderID).Scan(&order.OrderID, &order.Status, &order.Accrual, &order.UserID)
+func (r *UserRepository) GetOrder(ctx context.Context, orderID string) (model.Order, error) {
+	var order model.Order
+	q := `SELECT order_id, status, accrual, user_id, uploaded_at FROM orders WHERE order_id = $1 `
+	err := r.db.QueryRowContext(ctx, q, orderID).Scan(&order.OrderID, &order.Status, &order.Accrual, &order.UserID, &order.UploadedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return order, internalErrors.ErrOrderNotFound // Заказ не найден
@@ -100,4 +102,27 @@ func (r *UserRepository) GetOrder(ctx context.Context, orderID string) (models.O
 	}
 
 	return order, nil
+}
+func (r *UserRepository) GetOrders(ctx context.Context, userID string) ([]model.Order, error) {
+	var orders []model.Order
+	q := `SELECT order_id, status, accrual, user_id, uploaded_at FROM orders WHERE user_id = $1 ORDER BY uploaded_at DESC`
+	rows, err := r.db.QueryContext(ctx, q, userID)
+	defer rows.Close()
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return orders, internalErrors.ErrOrderNotFound // Заказ не найден
+		}
+		return orders, err
+	}
+
+	for rows.Next() {
+		var order model.Order
+		err := rows.Scan(&order.OrderID, &order.Status, &order.Accrual, &order.UserID, &order.UploadedAt)
+		if err != nil {
+			return orders, err
+		}
+		orders = append(orders, order)
+	}
+
+	return orders, nil
 }

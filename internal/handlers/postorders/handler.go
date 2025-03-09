@@ -7,18 +7,20 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 
 	internal_errors "github.com/ruslantos/gophemart-service/internal/errors"
 	"github.com/ruslantos/gophemart-service/internal/logger"
 	"github.com/ruslantos/gophemart-service/internal/middlware/auth"
-	"github.com/ruslantos/gophemart-service/internal/models"
+	"github.com/ruslantos/gophemart-service/internal/model"
 )
 
 type service interface {
-	GetOrder(ctx context.Context, orderNumber string) (models.Order, error)
+	GetOrder(ctx context.Context, orderNumber string) (model.Order, error)
 	SendOrderToLoyaltyClient(orderNumber string)
+	SaveOrder(ctx context.Context, order model.Order) error
 }
 
 type OrderHandler struct {
@@ -79,6 +81,19 @@ func (h *OrderHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	default:
 		log.Error("Failed to get order", zap.Error(err))
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// сохраняем заказ в БД
+	err = h.service.SaveOrder(r.Context(), model.Order{
+		OrderID:    orderNumber,
+		UserID:     userID,
+		Status:     model.STATE_NEW,
+		UploadedAt: time.Now(),
+	})
+	if err != nil {
+		log.Error("Failed to save order", zap.Error(err))
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}

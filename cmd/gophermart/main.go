@@ -12,6 +12,7 @@ import (
 
 	"github.com/ruslantos/gophemart-service/internal/clients"
 	"github.com/ruslantos/gophemart-service/internal/config"
+	"github.com/ruslantos/gophemart-service/internal/handlers/getorders"
 	login "github.com/ruslantos/gophemart-service/internal/handlers/login"
 	"github.com/ruslantos/gophemart-service/internal/handlers/postorders"
 	"github.com/ruslantos/gophemart-service/internal/handlers/register"
@@ -19,7 +20,7 @@ import (
 	authMiddlware "github.com/ruslantos/gophemart-service/internal/middlware/auth"
 	loggerMiddleware "github.com/ruslantos/gophemart-service/internal/middlware/logger"
 	"github.com/ruslantos/gophemart-service/internal/repository"
-	"github.com/ruslantos/gophemart-service/internal/service"
+	gophemartService "github.com/ruslantos/gophemart-service/internal/service"
 )
 
 func main() {
@@ -48,14 +49,14 @@ func main() {
 	err = userRepo.InitStorage()
 
 	// Инициализация сервиса
-	userService := service.NewUserService(userRepo, loyaltyClient)
+	service := gophemartService.NewUserService(userRepo, loyaltyClient)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	userService.StartWorker(ctx)
-	defer userService.StopWorker()
+	service.StartWorker(ctx)
+	defer service.StopWorker()
 
-	r := setupRouter(userService)
+	r := setupRouter(service)
 
 	err = http.ListenAndServe(cfg.RunAddress, r)
 	if err != nil {
@@ -63,22 +64,24 @@ func main() {
 	}
 }
 
-func setupRouter(userService *service.UserService) *chi.Mux {
+func setupRouter(service *gophemartService.UserService) *chi.Mux {
 	log, err := zap.NewDevelopment()
 	if err != nil {
 		log.Fatal("cannot create logger", zap.Error(err))
 	}
 
-	registerHandler := register.NewUserHandler(userService)
-	loginHandler := login.NewHandler(userService)
-	postordersHandler := postorders.NewHandler(userService)
+	registerHandler := register.NewUserHandler(service)
+	loginHandler := login.NewHandler(service)
+	postordersHandler := postorders.NewHandler(service)
+	getordersHandler := getorders.NewHandler(service)
 
 	r := chi.NewRouter()
-	r.Use(authMiddlware.AuthMiddleware(userService), loggerMiddleware.Logger(log))
+	r.Use(authMiddlware.AuthMiddleware(service), loggerMiddleware.Logger(log))
 
 	r.Post("/api/user/register", registerHandler.Handle)
 	r.Post("/api/user/login", loginHandler.Handle)
 	r.Post("/api/user/orders", postordersHandler.Handle)
+	r.Get("/api/user/orders", getordersHandler.Handle)
 
 	return r
 }
