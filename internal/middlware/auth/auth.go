@@ -23,7 +23,7 @@ const (
 	UserIDKey contextKey = "userID"
 )
 
-func AuthMiddleware(userService *service.UserService) func(http.Handler) http.Handler {
+func AuthMiddleware(userService *service.Service) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// при регистрации и авторизации не проверяем

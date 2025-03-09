@@ -1,6 +1,7 @@
 package register
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
@@ -9,12 +10,14 @@ import (
 	internalErrors "github.com/ruslantos/gophemart-service/internal/errors"
 	"github.com/ruslantos/gophemart-service/internal/logger"
 	"github.com/ruslantos/gophemart-service/internal/middlware/auth"
-
-	"github.com/ruslantos/gophemart-service/internal/service"
 )
 
+type service interface {
+	Register(ctx context.Context, login, password string) error
+}
+
 type UserHandler struct {
-	service *service.UserService
+	service service
 }
 
 type RegisterRequest struct {
@@ -22,7 +25,7 @@ type RegisterRequest struct {
 	Password string `json:"password"`
 }
 
-func NewUserHandler(service *service.UserService) *UserHandler {
+func NewUserHandler(service service) *UserHandler {
 	return &UserHandler{service: service}
 }
 

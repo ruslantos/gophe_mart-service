@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
@@ -8,14 +9,17 @@ import (
 
 	"github.com/ruslantos/gophemart-service/internal/logger"
 	"github.com/ruslantos/gophemart-service/internal/middlware/auth"
-	"github.com/ruslantos/gophemart-service/internal/service"
 )
 
-type UserHandler struct {
-	service *service.UserService
+type service interface {
+	Authenticate(ctx context.Context, login, password string) bool
 }
 
-func NewHandler(service *service.UserService) *UserHandler {
+type UserHandler struct {
+	service service
+}
+
+func NewHandler(service service) *UserHandler {
 	return &UserHandler{service: service}
 }
 

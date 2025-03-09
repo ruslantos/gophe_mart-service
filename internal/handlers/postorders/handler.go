@@ -53,14 +53,13 @@ func (h *OrderHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	// Получаем номер заказа
 	orderNumber := strings.TrimSpace(string(body))
 	if orderNumber == "" {
 		http.Error(w, "Order number is required", http.StatusBadRequest)
 		return
 	}
 
-	// Проверяем номер заказа с помощью алгоритма Луна
+	// проверяем номер заказа с помощью алгоритма Луна
 	if !validateLuhn(orderNumber) {
 		http.Error(w, "Invalid order number format", http.StatusUnprocessableEntity)
 		return
@@ -69,12 +68,15 @@ func (h *OrderHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	// проверяем заказ и пользователя на наличие в базе данных
 	orderDB, err := h.service.GetOrder(r.Context(), orderNumber)
 	switch {
+	// заказ новый
 	case err != nil && errors.Is(err, internal_errors.ErrOrderNotFound):
 		break
+	// уже загружался пользователем
 	case orderDB.UserID == userID:
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Order already uploaded by this user"))
 		return
+	// принадлежит другому
 	case orderDB.UserID != userID:
 		w.WriteHeader(http.StatusConflict)
 		w.Write([]byte("Order already uploaded by another user"))
@@ -98,7 +100,7 @@ func (h *OrderHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Добавляем заказ в воркер
+	// добавляем заказ в воркер
 	h.service.SendOrderToLoyaltyClient(orderNumber)
 
 	w.Header().Set("Content-Type", "application/json")

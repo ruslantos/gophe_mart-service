@@ -19,3 +19,8 @@ type Order struct {
 	UserID     string    `json:"user_id"`
 	UploadedAt time.Time `json:"uploaded_at"`
 }
+
+type User struct {
+	Login    string `db:"login"`
+	Password string `db:"password"`
+}

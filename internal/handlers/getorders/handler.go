@@ -42,7 +42,6 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Получаем заказы пользователя
 	orders, err := h.service.GetOrders(ctx, userID)
 	if err != nil {
 		log.Error("Failed to get user orders", zap.Error(err))
@@ -50,7 +49,6 @@ func (h *Handler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Если заказов нет
 	if len(orders) == 0 {
 		w.WriteHeader(http.StatusNoContent)
 		return

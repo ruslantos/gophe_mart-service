@@ -49,8 +49,9 @@ func main() {
 	err = userRepo.InitStorage()
 
 	// Инициализация сервиса
-	service := gophemartService.NewUserService(userRepo, loyaltyClient)
+	service := gophemartService.NewService(userRepo, loyaltyClient)
 
+	// Старт воркера
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	service.StartWorker(ctx)
@@ -64,7 +65,7 @@ func main() {
 	}
 }
 
-func setupRouter(service *gophemartService.UserService) *chi.Mux {
+func setupRouter(service *gophemartService.Service) *chi.Mux {
 	log, err := zap.NewDevelopment()
 	if err != nil {
 		log.Fatal("cannot create logger", zap.Error(err))

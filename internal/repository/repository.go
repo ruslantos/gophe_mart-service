@@ -16,11 +16,6 @@ import (
 	"github.com/ruslantos/gophemart-service/internal/model"
 )
 
-type User struct {
-	Login    string `db:"login"`
-	Password string `db:"password"`
-}
-
 type UserRepository struct {
 	db *sqlx.DB
 }
@@ -63,8 +58,8 @@ func (r *UserRepository) CreateUser(ctx context.Context, login, password string)
 	}
 	return nil
 }
-func (r *UserRepository) GetUserByLogin(ctx context.Context, login string) (*User, error) {
-	var user User
+func (r *UserRepository) GetUserByLogin(ctx context.Context, login string) (*model.User, error) {
+	var user model.User
 	query := `SELECT login, password FROM users WHERE login = $1`
 	err := r.db.GetContext(ctx, &user, query, login)
 	if err != nil {
@@ -77,7 +72,6 @@ func (r *UserRepository) GetUserByLogin(ctx context.Context, login string) (*Use
 	return &user, nil
 }
 
-// order
 func (r *UserRepository) SaveOrder(ctx context.Context, order model.Order) error {
 	q := `
 INSERT INTO orders (order_id, status, accrual, user_id, uploaded_at) VALUES ($1, $2, $3, $4, $5)
