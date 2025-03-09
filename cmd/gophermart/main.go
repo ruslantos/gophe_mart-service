@@ -17,6 +17,7 @@ import (
 	"github.com/ruslantos/gophemart-service/internal/handlers/register"
 	"github.com/ruslantos/gophemart-service/internal/logger"
 	authMiddlware "github.com/ruslantos/gophemart-service/internal/middlware/auth"
+	loggerMiddleware "github.com/ruslantos/gophemart-service/internal/middlware/logger"
 	"github.com/ruslantos/gophemart-service/internal/repository"
 	"github.com/ruslantos/gophemart-service/internal/service"
 )
@@ -63,12 +64,17 @@ func main() {
 }
 
 func setupRouter(userService *service.UserService) *chi.Mux {
+	log, err := zap.NewDevelopment()
+	if err != nil {
+		log.Fatal("cannot create logger", zap.Error(err))
+	}
+
 	registerHandler := register.NewUserHandler(userService)
 	loginHandler := login.NewHandler(userService)
 	postordersHandler := postorders.NewHandler(userService)
 
 	r := chi.NewRouter()
-	r.Use(authMiddlware.AuthMiddleware(userService))
+	r.Use(authMiddlware.AuthMiddleware(userService), loggerMiddleware.Logger(log))
 
 	r.Post("/api/user/register", registerHandler.Handle)
 	r.Post("/api/user/login", loginHandler.Handle)

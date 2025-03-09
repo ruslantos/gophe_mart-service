@@ -83,10 +83,10 @@ func (h *OrderHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Добавляем заказ через сервис
+	// Добавляем заказ в воркер
 	h.service.SendOrderToLoyaltyClient(orderNumber)
 
-	// Заказ принят в обработку
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	w.Write([]byte("Order accepted for processing"))
 }
