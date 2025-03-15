@@ -108,13 +108,6 @@ func (s *Service) processOrder(ctx context.Context, order model.Order) {
 			return
 		default:
 			orderInfo, err := s.client.GetOrderInfo(order.OrderID)
-			// todo убрать
-			//var err error
-			//orderInfo := clients.OrderResponse{
-			//	Status:  model.StateProcessed,
-			//	Accrual: 456,
-			//}
-
 			if err != nil {
 				if errors.Is(err, clients.ErrTooManyRequests) {
 					time.Sleep(1 * time.Second)
