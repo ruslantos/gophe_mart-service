@@ -116,7 +116,6 @@ func (r *UserRepository) GetOrders(ctx context.Context, userID string) ([]model.
 	var orders []model.Order
 	q := `SELECT order_id, status, accrual, user_id, uploaded_at FROM orders WHERE user_id = $1 ORDER BY uploaded_at DESC`
 	rows, err := r.db.QueryContext(ctx, q, userID)
-	defer rows.Close()
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return orders, internalErrors.ErrOrderNotFound // Заказ не найден
@@ -126,6 +125,7 @@ func (r *UserRepository) GetOrders(ctx context.Context, userID string) ([]model.
 	if rows.Err() != nil {
 		return orders, rows.Err()
 	}
+	defer rows.Close()
 
 	for rows.Next() {
 		var order model.Order
@@ -218,13 +218,16 @@ func (r *UserRepository) GetWithdrawalsByUserID(ctx context.Context, userID stri
 	var withdrawals []model.Withdrawal
 	q := `SELECT user_id, order_id, withdrawals, processed_at FROM withdrawals WHERE user_id = $1 ORDER BY processed_at DESC`
 	rows, err := r.db.QueryContext(ctx, q, userID)
-	defer rows.Close()
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return withdrawals, nil
 		}
 		return withdrawals, err
 	}
+	if rows.Err() != nil {
+		return withdrawals, rows.Err()
+	}
+	defer rows.Close()
 
 	for rows.Next() {
 		var withdrawal model.Withdrawal
