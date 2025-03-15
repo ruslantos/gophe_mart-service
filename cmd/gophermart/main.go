@@ -50,6 +50,9 @@ func main() {
 	// Инициализация репозитория
 	userRepo := repository.NewUserRepository(db)
 	err = userRepo.InitStorage()
+	if err != nil {
+		logger.Get().Fatal("Failed to initialize storage for user", zap.Error(err))
+	}
 
 	// Инициализация сервиса
 	service := gophemartService.NewService(userRepo, loyaltyClient)

@@ -24,9 +24,9 @@ func Parse() (*Config, error) {
 	flag.Parse()
 
 	// todo удалить
-	os.Setenv("DATABASE_URI", "user=videos password=password dbname=shortenerdatabase sslmode=disable")
-	os.Setenv("ACCRUAL_SYSTEM_ADDRESS", "http://localhost:8080")
-	os.Setenv("RUN_ADDRESS", ":8081")
+	//os.Setenv("DATABASE_URI", "user=videos password=password dbname=shortenerdatabase sslmode=disable")
+	//os.Setenv("ACCRUAL_SYSTEM_ADDRESS", "http://localhost:8080")
+	//os.Setenv("RUN_ADDRESS", ":8081")
 
 	config := &Config{
 		RunAddress:  *runAddress,

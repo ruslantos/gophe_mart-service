@@ -123,6 +123,9 @@ func (r *UserRepository) GetOrders(ctx context.Context, userID string) ([]model.
 		}
 		return orders, err
 	}
+	if rows.Err() != nil {
+		return orders, rows.Err()
+	}
 
 	for rows.Next() {
 		var order model.Order
