@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -41,10 +42,24 @@ func (r *UserRepository) InitStorage() error {
 		return err
 	}
 
+	_, err = r.db.ExecContext(context.Background(),
+		`CREATE TABLE IF NOT EXISTS accruals(user_id TEXT, accruals_sum FLOAT, withdrawals FLOAT DEFAULT 0);
+				CREATE UNIQUE INDEX IF NOT EXISTS idx_user_id ON accruals(user_id);`)
+	if err != nil {
+		logger.Get().Error("Failed to create withdrawals", zap.Error(err))
+		return err
+	}
+
+	_, err = r.db.ExecContext(context.Background(),
+		`CREATE TABLE IF NOT EXISTS withdrawals(user_id TEXT, order_id TEXT, withdrawals FLOAT, processed_at TIMESTAMP);`)
+	if err != nil {
+		logger.Get().Error("Failed to create withdrawals", zap.Error(err))
+		return err
+	}
+
 	return nil
 }
 
-// user
 func (r *UserRepository) CreateUser(ctx context.Context, login, password string) error {
 	query := `INSERT INTO users (login, password) VALUES ($1, $2)`
 	_, err := r.db.ExecContext(ctx, query, login, password)
@@ -119,4 +134,103 @@ func (r *UserRepository) GetOrders(ctx context.Context, userID string) ([]model.
 	}
 
 	return orders, nil
+}
+
+func (r *UserRepository) UpdateUserAccrualSum(ctx context.Context, order model.Order) error {
+	q := `
+INSERT INTO  accruals(user_id, accruals_sum) VALUES ($1, $2)
+ON CONFLICT (user_id) DO UPDATE
+SET accruals_sum = accruals.accruals_sum + EXCLUDED.accruals_sum;
+`
+	rows, err := r.db.ExecContext(ctx, q, order.UserID, order.Accrual)
+	if err != nil {
+		return fmt.Errorf("failed to save user accrual: %w", err)
+	}
+	rowsAffected, err := rows.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to save user accrual: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("failed to save user accrual: no rows affected")
+	}
+	return nil
+}
+func (r *UserRepository) GetUserAccrualSum(ctx context.Context, userID string) (model.UserBalance, error) {
+	var balance model.UserBalance
+	q := `SELECT accruals_sum, withdrawals FROM accruals WHERE user_id = $1`
+	err := r.db.QueryRowContext(ctx, q, userID).Scan(&balance.Current, &balance.Withdrawn)
+	if err != nil && err != sql.ErrNoRows {
+		balance.Current = 0
+	} else {
+		logger.Get().Error("Failed to get user accrual sum", zap.Error(err))
+		return balance, err
+	}
+
+	return balance, nil
+}
+func (r *UserRepository) Withdraw(ctx context.Context, withdrawal model.Withdrawal) error {
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// проверяем баланс
+	var currentBalance float64
+	q := `SELECT accruals_sum FROM accruals WHERE user_id = $1 FOR UPDATE;`
+	err = tx.GetContext(ctx, &currentBalance, q, withdrawal.UserID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return internalErrors.ErrInsufficientFunds
+		}
+		logger.Get().Error("Failed to get user accrual sum", zap.Error(err))
+	}
+
+	if currentBalance < withdrawal.Withdrawal {
+		return internalErrors.ErrInsufficientFunds
+	}
+
+	// списываем баллы
+	q = `UPDATE accruals SET accruals_sum = accruals_sum - $1, withdrawals = withdrawals + $1
+                WHERE user_id = $2`
+	_, err = tx.ExecContext(ctx, q, withdrawal.Withdrawal, withdrawal.UserID)
+	if err != nil {
+		return fmt.Errorf("failed to update user accrual: %w", err)
+	}
+
+	// делаем запись о списании
+	q = `INSERT INTO withdrawals (user_id, order_id, withdrawals, processed_at) VALUES ($1, $2, $3, $4)`
+	_, err = tx.ExecContext(ctx, q, withdrawal.UserID, withdrawal.OrderID, withdrawal.Withdrawal, time.Now())
+	if err != nil {
+		return fmt.Errorf("failed to save withdrawal: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *UserRepository) GetWithdrawalsByUserID(ctx context.Context, userID string) ([]model.Withdrawal, error) {
+	var withdrawals []model.Withdrawal
+	q := `SELECT user_id, order_id, withdrawals, processed_at FROM withdrawals WHERE user_id = $1 ORDER BY processed_at DESC`
+	rows, err := r.db.QueryContext(ctx, q, userID)
+	defer rows.Close()
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return withdrawals, nil
+		}
+		return withdrawals, err
+	}
+
+	for rows.Next() {
+		var withdrawal model.Withdrawal
+		err := rows.Scan(&withdrawal.UserID, &withdrawal.OrderID, &withdrawal.Withdrawal, &withdrawal.ProcessedAt)
+		if err != nil {
+			return withdrawals, err
+		}
+		withdrawals = append(withdrawals, withdrawal)
+	}
+
+	return withdrawals, nil
 }

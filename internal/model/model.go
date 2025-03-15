@@ -24,3 +24,15 @@ type User struct {
 	Login    string `db:"login"`
 	Password string `db:"password"`
 }
+
+type UserBalance struct {
+	Current   float64 `json:"current"`
+	Withdrawn float64 `json:"withdrawn"`
+}
+
+type Withdrawal struct {
+	OrderID     string    `json:"order_id"`
+	UserID      string    `json:"user_id"`
+	Withdrawal  float64   `json:"withdrawn"`
+	ProcessedAt time.Time `json:"processed_at"`
+}

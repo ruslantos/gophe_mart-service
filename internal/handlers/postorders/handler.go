@@ -19,7 +19,7 @@ import (
 
 type service interface {
 	GetOrder(ctx context.Context, orderNumber string) (model.Order, error)
-	SendOrderToLoyaltyClient(orderNumber string)
+	SendOrderToLoyaltyClient(order model.Order)
 	SaveOrder(ctx context.Context, order model.Order) error
 }
 
@@ -81,19 +81,21 @@ func (h *OrderHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusConflict)
 		w.Write([]byte("Order already uploaded by another user"))
 		return
-	default:
+	case err != nil:
 		log.Error("Failed to get order", zap.Error(err))
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	// сохраняем заказ в БД
-	err = h.service.SaveOrder(r.Context(), model.Order{
+	order := model.Order{
 		OrderID:    orderNumber,
 		UserID:     userID,
 		Status:     model.STATE_NEW,
 		UploadedAt: time.Now(),
-	})
+	}
+
+	// сохраняем заказ в БД
+	err = h.service.SaveOrder(r.Context(), order)
 	if err != nil {
 		log.Error("Failed to save order", zap.Error(err))
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -101,7 +103,7 @@ func (h *OrderHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// добавляем заказ в воркер
-	h.service.SendOrderToLoyaltyClient(orderNumber)
+	h.service.SendOrderToLoyaltyClient(order)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)

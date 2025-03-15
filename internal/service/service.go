@@ -20,12 +20,16 @@ type repo interface {
 	GetOrder(ctx context.Context, orderID string) (model.Order, error)
 	GetOrders(ctx context.Context, userID string) ([]model.Order, error)
 	SaveOrder(ctx context.Context, order model.Order) error
+	UpdateUserAccrualSum(ctx context.Context, order model.Order) error
+	GetUserAccrualSum(ctx context.Context, userID string) (model.UserBalance, error)
+	Withdraw(ctx context.Context, withdrawal model.Withdrawal) error
+	GetWithdrawalsByUserID(ctx context.Context, userID string) ([]model.Withdrawal, error)
 }
 
 type Service struct {
 	repo      repo
 	client    *clients.LoyaltyClient
-	orderChan chan string
+	orderChan chan model.Order
 	wg        sync.WaitGroup
 }
 
@@ -33,7 +37,7 @@ func NewService(repo repo, client *clients.LoyaltyClient) *Service {
 	return &Service{
 		repo:      repo,
 		client:    client,
-		orderChan: make(chan string, 100),
+		orderChan: make(chan model.Order, 100),
 		wg:        sync.WaitGroup{},
 	}
 }
@@ -85,8 +89,8 @@ func (s *Service) StartWorker(ctx context.Context) {
 		defer s.wg.Done()
 		for {
 			select {
-			case orderNumber := <-s.orderChan:
-				s.processOrder(ctx, orderNumber)
+			case order := <-s.orderChan:
+				s.processOrder(ctx, order)
 			case <-ctx.Done():
 				logger.Get().Info("Worker stopped")
 				return
@@ -94,37 +98,42 @@ func (s *Service) StartWorker(ctx context.Context) {
 		}
 	}()
 }
-func (s *Service) processOrder(ctx context.Context, orderNumber string) {
+func (s *Service) processOrder(ctx context.Context, order model.Order) {
 	orderCtx, cancel := context.WithTimeout(ctx, 5*time.Minute) // Таймаут 5 минут
 	defer cancel()
 	for {
 		select {
 		case <-orderCtx.Done():
-			logger.Get().Error("Order processing timeout", zap.String("orderNumber", orderNumber))
+			logger.Get().Error("Order processing timeout", zap.String("orderNumber", order.OrderID))
 			return
 		default:
-			orderInfo, err := s.client.GetOrderInfo(orderNumber)
+			//orderInfo, err := s.client.GetOrderInfo(order.OrderID)
+			var err error
+			orderInfo := clients.OrderResponse{
+				Status:  model.STATE_PROCESSED,
+				Accrual: 456,
+			}
+
 			if err != nil {
 				if errors.Is(err, clients.ErrTooManyRequests) {
 					time.Sleep(1 * time.Second)
 					continue
 				}
-				logger.Get().Error("Failed to process order", zap.String("orderNumber", orderNumber), zap.Error(err))
+				logger.Get().Error("Failed to process order", zap.String("orderNumber", order.OrderID), zap.Error(err))
 				// todo возможно надо проставить стаус INVALID
 				return
 			}
-			logger.Get().Info("Order processed:", zap.String("orderNumber", orderNumber), zap.String("status", orderInfo.Status), zap.Float64("accrual", orderInfo.Accrual))
-
-			order := model.Order{
-				OrderID: orderInfo.Order,
-			}
+			logger.Get().Info("Order processed:",
+				zap.String("orderNumber", order.OrderID),
+				zap.String("status", orderInfo.Status),
+				zap.Float64("accrual", orderInfo.Accrual))
 
 			// сохраняем предварительный результат и запрашиваем дальше
 			if orderInfo.Status == model.STATE_REGISTERED || orderInfo.Status == model.STATE_PROCESSING {
 				order.Status = orderInfo.Status
 				err := s.repo.SaveOrder(ctx, order)
 				if err != nil {
-					logger.Get().Error("Failed to save order", zap.String("orderNumber", orderNumber), zap.Error(err))
+					logger.Get().Error("Failed to save order", zap.String("orderNumber", order.OrderID), zap.Error(err))
 					return
 				}
 				continue
@@ -137,9 +146,18 @@ func (s *Service) processOrder(ctx context.Context, orderNumber string) {
 
 				err := s.repo.SaveOrder(ctx, order)
 				if err != nil {
-					logger.Get().Error("Failed to save order", zap.String("orderNumber", orderNumber), zap.Error(err))
+					logger.Get().Error("Failed to save order", zap.String("orderNumber", order.OrderID), zap.Error(err))
 					return
 				}
+
+				err = s.repo.UpdateUserAccrualSum(ctx, order)
+				if err != nil {
+					logger.Get().Error("Failed to update user accrual",
+						zap.String("orderNumber", order.OrderID),
+						zap.String("user", order.UserID),
+						zap.Error(err))
+				}
+
 				return
 			}
 
@@ -151,6 +169,18 @@ func (s *Service) StopWorker() {
 	close(s.orderChan)
 	s.wg.Wait()
 }
-func (s *Service) SendOrderToLoyaltyClient(orderNumber string) {
-	s.orderChan <- orderNumber
+func (s *Service) SendOrderToLoyaltyClient(order model.Order) {
+	s.orderChan <- order
+}
+
+func (s *Service) GetUserBalance(ctx context.Context, userID string) (model.UserBalance, error) {
+	return s.repo.GetUserAccrualSum(ctx, userID)
+}
+
+func (s *Service) Withdraw(ctx context.Context, withdrawal model.Withdrawal) error {
+	return s.repo.Withdraw(ctx, withdrawal)
+}
+
+func (s *Service) GetWithdrawalsByUserID(ctx context.Context, userID string) ([]model.Withdrawal, error) {
+	return s.repo.GetWithdrawalsByUserID(ctx, userID)
 }
