@@ -107,12 +107,13 @@ func (s *Service) processOrder(ctx context.Context, order model.Order) {
 			logger.Get().Error("Order processing timeout", zap.String("orderNumber", order.OrderID))
 			return
 		default:
-			//orderInfo, err := s.client.GetOrderInfo(order.OrderID)
-			var err error
-			orderInfo := clients.OrderResponse{
-				Status:  model.STATE_PROCESSED,
-				Accrual: 456,
-			}
+			orderInfo, err := s.client.GetOrderInfo(order.OrderID)
+			// todo убрать
+			//var err error
+			//orderInfo := clients.OrderResponse{
+			//	Status:  model.StateProcessed,
+			//	Accrual: 456,
+			//}
 
 			if err != nil {
 				if errors.Is(err, clients.ErrTooManyRequests) {
@@ -129,7 +130,7 @@ func (s *Service) processOrder(ctx context.Context, order model.Order) {
 				zap.Float64("accrual", orderInfo.Accrual))
 
 			// сохраняем предварительный результат и запрашиваем дальше
-			if orderInfo.Status == model.STATE_REGISTERED || orderInfo.Status == model.STATE_PROCESSING {
+			if orderInfo.Status == model.StateRegistered || orderInfo.Status == model.StateProcessing {
 				order.Status = orderInfo.Status
 				err := s.repo.SaveOrder(ctx, order)
 				if err != nil {
@@ -140,7 +141,7 @@ func (s *Service) processOrder(ctx context.Context, order model.Order) {
 			}
 
 			//сохраняем результат расчета баллов и выходим
-			if orderInfo.Status == model.STATE_PROCESSED || orderInfo.Status == model.STATE_INVALID {
+			if orderInfo.Status == model.StateProcessed || orderInfo.Status == model.StateInvalid {
 				order.Status = orderInfo.Status
 				order.Accrual = orderInfo.Accrual
 

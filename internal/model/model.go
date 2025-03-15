@@ -5,11 +5,11 @@ import (
 )
 
 const (
-	STATE_NEW        = "NEW"
-	STATE_REGISTERED = "REGISTERED"
-	STATE_INVALID    = "INVALID"
-	STATE_PROCESSING = "PROCESSING"
-	STATE_PROCESSED  = "PROCESSED"
+	StateNew        = "NEW"
+	StateRegistered = "REGISTERED"
+	StateInvalid    = "INVALID"
+	StateProcessing = "PROCESSING"
+	StateProcessed  = "PROCESSED"
 )
 
 type Order struct {

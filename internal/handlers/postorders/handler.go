@@ -90,7 +90,7 @@ func (h *OrderHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	order := model.Order{
 		OrderID:    orderNumber,
 		UserID:     userID,
-		Status:     model.STATE_NEW,
+		Status:     model.StateNew,
 		UploadedAt: time.Now(),
 	}
 
