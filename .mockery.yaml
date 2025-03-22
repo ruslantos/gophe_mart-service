@@ -1,39 +1,29 @@
-inpackage: true
-with-expecter: true
-filename: "mock_{{.InterfaceName}}_test.go"
-packages:
-  github.com/ruslantos/gophemart-service/internal/handlers/getorders:
-    config:
-      dir: internal/handlers/getorders
-    interfaces:
-      service:
-  github.com/ruslantos/gophemart-service/internal/handlers/getuserbalance:
-    config:
-      dir: internal/handlers/getuserbalance
-    interfaces:
-      service:
-  github.com/ruslantos/gophemart-service/internal/handlers/getuserwithdrawals:
-    config:
-      dir: internal/handlers/getuserwithdrawals
-    interfaces:
-      service:
-  github.com/ruslantos/gophemart-service/internal/handlers/login:
-    config:
-      dir: internal/handlers/login
-    interfaces:
-      service:
-  github.com/ruslantos/gophemart-service/internal/handlers/postorders:
-    config:
-      dir: internal/handlers/postorders
-    interfaces:
-      service:
-  github.com/ruslantos/gophemart-service/internal/handlers/register:
-    config:
-      dir: internal/handlers/register
-    interfaces:
-      service:
-  github.com/ruslantos/gophemart-service/internal/handlers/userbalancewithdraw:
-    config:
-      dir: internal/handlers/userbalancewithdraw
-    interfaces:
-      service:
+#inpackage: true
+#with-expecter: true
+#filename: "mock_{{.InterfaceName}}_test.go"
+#packages:
+#  github.com/ruslantos/gophemart-service/internal/handlers/balance:
+#    config:
+#      dir: internal/handlers/balance
+#    interfaces:
+#      serviceGetBalance:
+#  github.com/ruslantos/gophemart-service/internal/handlers/orders:
+#    config:
+#      dir: internal/handlers/orders
+#    interfaces:
+#      service:
+#  github.com/ruslantos/gophemart-service/internal/handlers/login:
+#    config:
+#      dir: internal/handlers/login
+#    interfaces:
+#      service:
+#  github.com/ruslantos/gophemart-service/internal/handlers/register:
+#    config:
+#      dir: internal/handlers/register
+#    interfaces:
+#      service:
+#  github.com/ruslantos/gophemart-service/internal/service:
+#    config:
+#      dir: internal/service
+#    interfaces:
+#      repo:

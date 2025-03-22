@@ -16,6 +16,7 @@ import (
 	"github.com/ruslantos/gophemart-service/internal/model"
 )
 
+//go:generate mockery --name=repo --output . --inpackage --with-expecter
 type repo interface {
 	CreateUser(ctx context.Context, login, password string) error
 	GetUserByLogin(ctx context.Context, login string) (*model.User, error)
@@ -29,15 +30,20 @@ type repo interface {
 	GetWithdrawalsByUserID(ctx context.Context, userID string) ([]model.Withdrawal, error)
 }
 
+//go:generate mockery --name=client --output . --inpackage --with-expecter
+type client interface {
+	GetOrderInfo(ctx context.Context, orderNumber string) (*clients.OrderResponse, error)
+}
+
 type Service struct {
 	repo      repo
-	client    *clients.LoyaltyClient
+	client    client
 	orderChan chan model.Order
 	wg        sync.WaitGroup
 	Cron      *cron.Cron
 }
 
-func NewService(repo repo, client *clients.LoyaltyClient) *Service {
+func NewService(repo repo, client client) *Service {
 	return &Service{
 		repo:      repo,
 		client:    client,

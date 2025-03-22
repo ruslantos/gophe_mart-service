@@ -15,6 +15,7 @@ import (
 	"github.com/ruslantos/gophemart-service/internal/model"
 )
 
+//go:generate mockery --name=serviceWithdraw --output . --inpackage --with-expecter
 type serviceWithdraw interface {
 	Withdraw(ctx context.Context, withdrawal model.Withdrawal) error
 }

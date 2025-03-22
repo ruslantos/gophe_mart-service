@@ -12,6 +12,7 @@ import (
 	"github.com/ruslantos/gophemart-service/internal/model"
 )
 
+//go:generate mockery --name=serviceGetBalance --output . --inpackage --with-expecter
 type serviceGetBalance interface {
 	GetUserBalance(ctx context.Context, userID string) (model.UserBalance, error)
 }

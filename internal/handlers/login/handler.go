@@ -11,6 +11,7 @@ import (
 	"github.com/ruslantos/gophemart-service/internal/middlware/auth"
 )
 
+//go:generate mockery --name=service --output . --inpackage --with-expecter
 type service interface {
 	Authenticate(ctx context.Context, login, password string) bool
 }

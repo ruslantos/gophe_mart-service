@@ -12,6 +12,7 @@ import (
 	"github.com/ruslantos/gophemart-service/internal/middlware/auth"
 )
 
+//go:generate mockery --name=service --output . --inpackage --with-expecter
 type service interface {
 	Register(ctx context.Context, login, password string) error
 }

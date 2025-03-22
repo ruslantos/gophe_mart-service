@@ -17,6 +17,7 @@ import (
 	"github.com/ruslantos/gophemart-service/internal/model"
 )
 
+//go:generate mockery --name=servicePost --output . --inpackage --with-expecter
 type servicePost interface {
 	GetOrder(ctx context.Context, orderNumber string) (model.Order, error)
 	SaveOrder(ctx context.Context, order model.Order) error
