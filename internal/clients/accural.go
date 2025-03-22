@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -24,9 +25,10 @@ var (
 )
 
 type OrderResponse struct {
-	Order   string  `json:"order"`
-	Status  string  `json:"status"`
-	Accrual float64 `json:"accrual,omitempty"`
+	Order      string        `json:"order"`
+	Status     string        `json:"status"`
+	Accrual    float64       `json:"accrual,omitempty"`
+	RetryAfter time.Duration `json:"retry_after,omitempty"`
 }
 
 type LoyaltyClient struct {
@@ -77,7 +79,12 @@ func (c *LoyaltyClient) GetOrderInfo(ctx context.Context, orderNumber string) (*
 
 	case http.StatusTooManyRequests:
 		retryAfter := resp.Header.Get("Retry-After")
-		return nil, fmt.Errorf("%w: retry after %s seconds", ErrTooManyRequests, retryAfter)
+		var orderResp OrderResponse
+		if seconds, err := strconv.Atoi(retryAfter); err == nil {
+			orderResp.RetryAfter = time.Duration(seconds) * time.Second
+			return &orderResp, fmt.Errorf("%w: retry after %s seconds", ErrTooManyRequests, retryAfter)
+		}
+		return nil, fmt.Errorf("too many requests: %w", err)
 
 	case http.StatusInternalServerError:
 		return nil, ErrInternalServer

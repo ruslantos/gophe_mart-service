@@ -45,6 +45,13 @@ func main() {
 	// Инициализация сервиса
 	service := gophemartService.NewService(userRepo, loyaltyClient)
 
+	// Инициализация крона
+	_, err = service.Cron.AddFunc("@every 10s", service.SendOrderToLoyaltyClient)
+	if err != nil {
+		logger.Get().Fatal("Failed to add cron job", zap.Error(err))
+	}
+	service.Cron.Start()
+
 	// Старт воркера
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

@@ -19,7 +19,6 @@ import (
 
 type servicePost interface {
 	GetOrder(ctx context.Context, orderNumber string) (model.Order, error)
-	SendOrderToLoyaltyClient(order model.Order)
 	SaveOrder(ctx context.Context, order model.Order) error
 }
 
@@ -101,9 +100,6 @@ func (h *PostOrderHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-
-	// добавляем заказ в воркер
-	h.servicePost.SendOrderToLoyaltyClient(order)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)

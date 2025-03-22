@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 	"go.uber.org/zap"
 
 	internalErrors "github.com/ruslantos/gophemart-service/internal/errors"
@@ -88,15 +89,37 @@ func (r *UserRepository) GetUserByLogin(ctx context.Context, login string) (*mod
 }
 
 func (r *UserRepository) SaveOrder(ctx context.Context, order model.Order) error {
+	tx, err := r.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
 	q := `
 INSERT INTO orders (order_id, status, accrual, user_id, uploaded_at) VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (order_id) 
 DO UPDATE SET status = EXCLUDED.status, accrual = EXCLUDED.accrual
 `
-	_, err := r.db.ExecContext(ctx, q, order.OrderID, order.Status, order.Accrual, order.UserID, order.UploadedAt)
+	_, err = tx.ExecContext(ctx, q, order.OrderID, order.Status, order.Accrual, order.UserID, order.UploadedAt)
 	if err != nil {
 		return fmt.Errorf("failed to save order: %w", err)
 	}
+
+	if order.Status == model.StateProcessed {
+		err = r.UpdateUserAccrualSum(ctx, order)
+		if err != nil {
+			logger.Get().Error("Failed to update user accrual",
+				zap.String("orderNumber", order.OrderID),
+				zap.String("user", order.UserID),
+				zap.Error(err))
+			return err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
 	return nil
 }
 func (r *UserRepository) GetOrder(ctx context.Context, orderID string) (model.Order, error) {
@@ -116,6 +139,32 @@ func (r *UserRepository) GetOrders(ctx context.Context, userID string) ([]model.
 	var orders []model.Order
 	q := `SELECT order_id, status, accrual, user_id, uploaded_at FROM orders WHERE user_id = $1 ORDER BY uploaded_at DESC`
 	rows, err := r.db.QueryContext(ctx, q, userID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return orders, internalErrors.ErrOrderNotFound // Заказ не найден
+		}
+		return orders, err
+	}
+	if rows.Err() != nil {
+		return orders, rows.Err()
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var order model.Order
+		err := rows.Scan(&order.OrderID, &order.Status, &order.Accrual, &order.UserID, &order.UploadedAt)
+		if err != nil {
+			return orders, err
+		}
+		orders = append(orders, order)
+	}
+
+	return orders, nil
+}
+func (r *UserRepository) GetOrdersByStates(ctx context.Context, states []string) ([]model.Order, error) {
+	var orders []model.Order
+	q := `SELECT order_id, status, accrual, user_id, uploaded_at FROM orders WHERE status = ANY ($1) ORDER BY uploaded_at DESC`
+	rows, err := r.db.QueryContext(ctx, q, pq.Array(states))
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return orders, internalErrors.ErrOrderNotFound // Заказ не найден

@@ -6,6 +6,8 @@ require (
 	github.com/go-chi/chi/v5 v5.2.1
 	github.com/jackc/pgx/v5 v5.7.2
 	github.com/jmoiron/sqlx v1.4.0
+	github.com/lib/pq v1.10.9
+	github.com/robfig/cron/v3 v3.0.1
 	go.uber.org/zap v1.27.0
 )
 

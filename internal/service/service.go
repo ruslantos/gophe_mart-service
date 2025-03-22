@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/robfig/cron/v3"
+
 	"go.uber.org/zap"
 
 	"github.com/ruslantos/gophemart-service/internal/clients"
@@ -19,6 +21,7 @@ type repo interface {
 	GetUserByLogin(ctx context.Context, login string) (*model.User, error)
 	GetOrder(ctx context.Context, orderID string) (model.Order, error)
 	GetOrders(ctx context.Context, userID string) ([]model.Order, error)
+	GetOrdersByStates(ctx context.Context, states []string) ([]model.Order, error)
 	SaveOrder(ctx context.Context, order model.Order) error
 	UpdateUserAccrualSum(ctx context.Context, order model.Order) error
 	GetUserAccrualSum(ctx context.Context, userID string) (model.UserBalance, error)
@@ -31,6 +34,7 @@ type Service struct {
 	client    *clients.LoyaltyClient
 	orderChan chan model.Order
 	wg        sync.WaitGroup
+	Cron      *cron.Cron
 }
 
 func NewService(repo repo, client *clients.LoyaltyClient) *Service {
@@ -39,6 +43,7 @@ func NewService(repo repo, client *clients.LoyaltyClient) *Service {
 		client:    client,
 		orderChan: make(chan model.Order, 100),
 		wg:        sync.WaitGroup{},
+		Cron:      cron.New(cron.WithSeconds()),
 	}
 }
 
@@ -99,22 +104,19 @@ func (s *Service) StartWorker(ctx context.Context) {
 	}()
 }
 func (s *Service) processOrder(ctx context.Context, order model.Order) {
-	orderCtx, cancel := context.WithTimeout(ctx, 5*time.Minute) // Таймаут 5 минут
-	defer cancel()
 	for {
 		select {
-		case <-orderCtx.Done():
+		case <-ctx.Done():
 			logger.Get().Error("Order processing timeout", zap.String("orderNumber", order.OrderID))
 			return
 		default:
 			orderInfo, err := s.client.GetOrderInfo(ctx, order.OrderID)
 			if err != nil {
 				if errors.Is(err, clients.ErrTooManyRequests) {
-					time.Sleep(1 * time.Second)
+					time.Sleep(orderInfo.RetryAfter * time.Second)
 					continue
 				}
 				logger.Get().Error("Failed to process order", zap.String("orderNumber", order.OrderID), zap.Error(err))
-				// todo возможно надо проставить стаус INVALID
 				return
 			}
 			logger.Get().Info("Order processed:",
@@ -122,40 +124,15 @@ func (s *Service) processOrder(ctx context.Context, order model.Order) {
 				zap.String("status", orderInfo.Status),
 				zap.Float64("accrual", orderInfo.Accrual))
 
-			// сохраняем предварительный результат и запрашиваем дальше
-			if orderInfo.Status == model.StateRegistered || orderInfo.Status == model.StateProcessing {
-				order.Status = orderInfo.Status
-				err := s.repo.SaveOrder(ctx, order)
-				if err != nil {
-					logger.Get().Error("Failed to save order", zap.String("orderNumber", order.OrderID), zap.Error(err))
-					return
-				}
-				continue
-			}
-
-			//сохраняем результат расчета баллов и выходим
-			if orderInfo.Status == model.StateProcessed || orderInfo.Status == model.StateInvalid {
-				order.Status = orderInfo.Status
-				order.Accrual = orderInfo.Accrual
-
-				err := s.repo.SaveOrder(ctx, order)
-				if err != nil {
-					logger.Get().Error("Failed to save order", zap.String("orderNumber", order.OrderID), zap.Error(err))
-					return
-				}
-
-				err = s.repo.UpdateUserAccrualSum(ctx, order)
-				if err != nil {
-					logger.Get().Error("Failed to update user accrual",
-						zap.String("orderNumber", order.OrderID),
-						zap.String("user", order.UserID),
-						zap.Error(err))
-				}
-
+			order.Status = orderInfo.Status
+			order.Accrual = orderInfo.Accrual
+			if err = s.repo.SaveOrder(ctx, order); err != nil {
+				logger.Get().Error("Failed to save order", zap.String("orderNumber", order.OrderID), zap.Error(err))
 				return
 			}
 
 			time.Sleep(1 * time.Second)
+			return
 		}
 	}
 }
@@ -163,8 +140,20 @@ func (s *Service) StopWorker() {
 	close(s.orderChan)
 	s.wg.Wait()
 }
-func (s *Service) SendOrderToLoyaltyClient(order model.Order) {
-	s.orderChan <- order
+func (s *Service) SendOrderToLoyaltyClient() {
+	ctx := context.Background()
+	orders, err := s.repo.GetOrdersByStates(ctx, []string{
+		model.StateNew,
+		model.StateRegistered,
+		model.StateProcessing,
+	})
+	if err != nil {
+		logger.Get().Error("Failed to get orders", zap.Error(err))
+		return
+	}
+	for _, order := range orders {
+		s.orderChan <- order
+	}
 }
 
 func (s *Service) GetUserBalance(ctx context.Context, userID string) (model.UserBalance, error) {
