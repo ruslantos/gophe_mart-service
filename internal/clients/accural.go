@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -42,9 +43,13 @@ func NewLoyaltyClient(baseURL string) *LoyaltyClient {
 }
 
 func (c *LoyaltyClient) GetOrderInfo(orderNumber string) (*OrderResponse, error) {
-	url := fmt.Sprintf("%s/api/orders/%s", c.baseURL, orderNumber)
+	var URL strings.Builder
+	URL.Grow(128)
+	URL.WriteString(c.baseURL)
+	URL.WriteString("/api/orders/")
+	URL.WriteString(orderNumber)
 
-	req, err := http.NewRequest(http.MethodGet, url, bytes.NewBuffer(nil))
+	req, err := http.NewRequest(http.MethodGet, URL.String(), bytes.NewBuffer(nil))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
