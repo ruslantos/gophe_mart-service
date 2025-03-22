@@ -107,7 +107,7 @@ func (s *Service) processOrder(ctx context.Context, order model.Order) {
 			logger.Get().Error("Order processing timeout", zap.String("orderNumber", order.OrderID))
 			return
 		default:
-			orderInfo, err := s.client.GetOrderInfo(order.OrderID)
+			orderInfo, err := s.client.GetOrderInfo(ctx, order.OrderID)
 			if err != nil {
 				if errors.Is(err, clients.ErrTooManyRequests) {
 					time.Sleep(1 * time.Second)

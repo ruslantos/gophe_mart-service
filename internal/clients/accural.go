@@ -2,6 +2,7 @@ package clients
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -42,7 +43,7 @@ func NewLoyaltyClient(baseURL string) *LoyaltyClient {
 	}
 }
 
-func (c *LoyaltyClient) GetOrderInfo(orderNumber string) (*OrderResponse, error) {
+func (c *LoyaltyClient) GetOrderInfo(ctx context.Context, orderNumber string) (*OrderResponse, error) {
 	var URL strings.Builder
 	URL.Grow(128)
 	URL.WriteString(c.baseURL)
@@ -53,6 +54,7 @@ func (c *LoyaltyClient) GetOrderInfo(orderNumber string) (*OrderResponse, error)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
+	req = req.WithContext(ctx)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
