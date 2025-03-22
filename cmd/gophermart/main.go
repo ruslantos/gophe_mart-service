@@ -5,24 +5,15 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/jmoiron/sqlx"
 
 	"go.uber.org/zap"
 
 	"github.com/ruslantos/gophemart-service/internal/clients"
 	"github.com/ruslantos/gophemart-service/internal/config"
-	"github.com/ruslantos/gophemart-service/internal/handlers/getorders"
-	"github.com/ruslantos/gophemart-service/internal/handlers/getuserbalance"
-	"github.com/ruslantos/gophemart-service/internal/handlers/getuserwithdrawals"
-	login "github.com/ruslantos/gophemart-service/internal/handlers/login"
-	"github.com/ruslantos/gophemart-service/internal/handlers/postorders"
-	"github.com/ruslantos/gophemart-service/internal/handlers/register"
-	"github.com/ruslantos/gophemart-service/internal/handlers/userbalancewithdraw"
 	"github.com/ruslantos/gophemart-service/internal/logger"
-	authMiddlware "github.com/ruslantos/gophemart-service/internal/middlware/auth"
-	loggerMiddleware "github.com/ruslantos/gophemart-service/internal/middlware/logger"
 	"github.com/ruslantos/gophemart-service/internal/repository"
+	"github.com/ruslantos/gophemart-service/internal/router"
 	gophemartService "github.com/ruslantos/gophemart-service/internal/service"
 )
 
@@ -32,15 +23,13 @@ func main() {
 		log.Fatalf("Ошибка при загрузке конфигурации: %v", err)
 	}
 
-	var db *sqlx.DB
-	db, err = sqlx.Open("pgx", cfg.DatabaseURI)
+	db, err := sqlx.Open("pgx", cfg.DatabaseURI)
 	if err != nil {
 		logger.Get().Fatal("Failed to connect to database", zap.Error(err))
 	}
 	defer db.Close()
 
-	err = db.Ping()
-	if err != nil {
+	if err = db.Ping(); err != nil {
 		logger.Get().Fatal("Failed to ping database", zap.Error(err))
 	}
 
@@ -49,8 +38,7 @@ func main() {
 
 	// Инициализация репозитория
 	userRepo := repository.NewUserRepository(db)
-	err = userRepo.InitStorage()
-	if err != nil {
+	if err = userRepo.InitStorage(); err != nil {
 		logger.Get().Fatal("Failed to initialize storage for user", zap.Error(err))
 	}
 
@@ -63,38 +51,9 @@ func main() {
 	service.StartWorker(ctx)
 	defer service.StopWorker()
 
-	r := setupRouter(service)
+	r := router.SetupRouter(service)
 
-	err = http.ListenAndServe(cfg.RunAddress, r)
-	if err != nil {
+	if err = http.ListenAndServe(cfg.RunAddress, r); err != nil {
 		logger.Get().Fatal("cannot start server", zap.Error(err))
 	}
-}
-
-func setupRouter(service *gophemartService.Service) *chi.Mux {
-	log, err := zap.NewDevelopment()
-	if err != nil {
-		log.Fatal("cannot create logger", zap.Error(err))
-	}
-
-	registerHandler := register.NewUserHandler(service)
-	loginHandler := login.NewHandler(service)
-	postordersHandler := postorders.NewHandler(service)
-	getordersHandler := getorders.NewHandler(service)
-	getUserbalanceHandler := getuserbalance.NewHandler(service)
-	userbalancewithdrawHandler := userbalancewithdraw.NewHandler(service)
-	getuserwithdrawalsHandler := getuserwithdrawals.NewHandler(service)
-
-	r := chi.NewRouter()
-	r.Use(authMiddlware.AuthMiddleware(service), loggerMiddleware.Logger(log))
-
-	r.Post("/api/user/register", registerHandler.Handle)
-	r.Post("/api/user/login", loginHandler.Handle)
-	r.Post("/api/user/orders", postordersHandler.Handle)
-	r.Get("/api/user/orders", getordersHandler.Handle)
-	r.Get("/api/user/balance", getUserbalanceHandler.Handle)
-	r.Post("/api/user/balance/withdraw", userbalancewithdrawHandler.Handle)
-	r.Get("/api/user/withdrawals", getuserwithdrawalsHandler.Handle)
-
-	return r
 }
